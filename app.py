@@ -7,7 +7,7 @@ import numpy as np
 app = Flask(__name__)
 
 # Load the trained model
-model = tf.keras.models.load_model('creditnetxai_model.h5')
+model =     ('creditnetxai_model.h5')
 
 # Load the scaler and feature columns from training
 scaler = joblib.load('standard_scaler.pkl')

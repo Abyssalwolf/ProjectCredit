@@ -1,0 +1,129 @@
+from ucimlrepo import fetch_ucirepo
+import pandas as pd
+  
+default_of_credit_card_clients = fetch_ucirepo(id=350) 
+  
+X = default_of_credit_card_clients.data.features 
+y = default_of_credit_card_clients.data.targets
+
+# metadata 
+print(default_of_credit_card_clients.metadata) 
+  
+# variable information 
+print(default_of_credit_card_clients.variables) 
+
+print(X.head())
+print(y.head())
+
+print(X.isnull().sum())
+print(y.isnull().sum())
+
+print(y.value_counts())
+
+print(X.head())
+
+# Inspect the target (y)
+print(y.head())
+print(y.value_counts())
+
+# Rename columns
+column_mapping = {
+    'X1': 'LIMIT_BAL',
+    'X2': 'SEX',
+    'X3': 'EDUCATION',
+    'X4': 'MARRIAGE',
+    'X5': 'AGE',
+    'X6': 'PAY_0',
+    'X7': 'PAY_2',
+    'X8': 'PAY_3',
+    'X9': 'PAY_4',
+    'X10': 'PAY_5',
+    'X11': 'PAY_6',
+    'X12': 'BILL_AMT1',
+    'X13': 'BILL_AMT2',
+    'X14': 'BILL_AMT3',
+    'X15': 'BILL_AMT4',
+    'X16': 'BILL_AMT5',
+    'X17': 'BILL_AMT6',
+    'X18': 'PAY_AMT1',
+    'X19': 'PAY_AMT2',
+    'X20': 'PAY_AMT3',
+    'X21': 'PAY_AMT4',
+    'X22': 'PAY_AMT5',
+    'X23': 'PAY_AMT6'
+}
+
+# Rename columns in X
+X = X.rename(columns=column_mapping)
+
+# Verify the column names
+print(X.columns)
+
+X = X.copy()
+
+# Fill missing values (if any)
+X.fillna(X.median(), inplace=True)
+
+# One-hot encode categorical variables
+X = pd.get_dummies(X, columns=['SEX', 'EDUCATION', 'MARRIAGE'], drop_first=True)
+
+from sklearn.preprocessing import StandardScaler
+import joblib
+
+# Scale numerical features
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X)
+X = pd.DataFrame(X_scaled, columns=X.columns)
+joblib.dump(scaler, 'standard_scaler.pkl')
+
+from sklearn.model_selection import train_test_split
+
+# Split the data into training and testing sets
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+feature_columns = X_train.columns.tolist()
+pd.DataFrame(feature_columns).to_csv('feature_columns.csv', index=False)
+
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense, Dropout
+
+model = Sequential([
+    Dense(128, activation='relu', input_shape=(X_train.shape[1],)),
+    Dropout(0.2),
+    Dense(64, activation='relu'),
+    Dropout(0.2),
+    Dense(32, activation='relu'),
+    Dropout(0.2),
+    Dense(1, activation='sigmoid')
+])
+
+model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+
+history = model.fit(X_train, y_train, epochs=20, batch_size=16, validation_split=0.2, verbose=1)
+
+from sklearn.metrics import accuracy_score, recall_score, confusion_matrix
+
+# Make predictions
+y_pred = (model.predict(X_test) > 0.4).astype(int)
+
+# Calculate metrics
+accuracy = accuracy_score(y_test, y_pred)
+sensitivity = recall_score(y_test, y_pred)
+tn, fp, fn, tp = confusion_matrix(y_test, y_pred).ravel()
+specificity = tn / (tn + fp)
+
+print(f"Accuracy: {accuracy}")
+print(f"Sensitivity: {sensitivity}")
+print(f"Specificity: {specificity}")
+
+import shap
+
+# Create a SHAP explainer
+explainer = shap.GradientExplainer(model, X_train[:100].values)
+shap_values = explainer.shap_values(X_test[:100].values)
+
+X_test_subset = X_test[:100]  # Select the same 100 rows used for SHAP
+
+shap_values_fixed = shap_values[:, :, 0]  # Convert from (100, 30, 1) to (100, 30)
+shap.summary_plot(shap_values_fixed, X_test_subset)
+
+model.save('creditnetxai_model.h5')

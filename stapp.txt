@@ -1,0 +1,145 @@
+import streamlit as st
+import pandas as pd
+import joblib
+from tensorflow.keras.models import load_model
+import shap
+import matplotlib.pyplot as plt
+import numpy as np
+
+# Updated caching with new Streamlit commands
+@st.cache_resource  # For model and scaler (resources)
+def load_artifacts():
+    model = load_model('creditnetxai_model.h5')
+    scaler = joblib.load('standard_scaler.pkl')
+    feature_cols = pd.read_csv('feature_columns.csv').iloc[:, 0].tolist()
+    return model, scaler, feature_cols
+
+model, scaler, feature_cols = load_artifacts()
+
+X_train=pd.read_csv('X_train.csv')
+X_test=pd.read_csv('X_test.csv')
+
+@st.cache_data  # For data (X_train)
+def load_shap_data():
+    return pd.read_csv('X_train.csv')
+
+X_train_shap = load_shap_data().iloc[:100]
+
+def preprocess_input(input_data):
+    df = pd.DataFrame([input_data])
+    df = pd.get_dummies(df, columns=['SEX', 'EDUCATION', 'MARRIAGE'], drop_first=True)
+    
+    for col in feature_cols:
+        if col not in df.columns:
+            df[col] = 0
+            
+    df = df[feature_cols]
+    return scaler.transform(df)
+
+# Metrics from training
+ACCURACY = 0.8101666666666667
+SENSITIVITY = 0.45925361766945927
+SPECIFICITY = 0.9084702368252614
+
+# Streamlit interface
+st.title("Credit Default Prediction System")
+
+# Metrics section
+st.header("Model Performance")
+st.metric("Accuracy", f"{ACCURACY:.2%}")
+st.metric("Sensitivity", f"{SENSITIVITY:.2%}")
+st.metric("Specificity", f"{SPECIFICITY:.2%}")
+
+# SHAP visualization with fixes
+st.header("Feature Importance Analysis")
+with st.spinner("Calculating SHAP values..."):
+    
+    # Initialize explainer with preprocessed data
+    explainer = shap.GradientExplainer(model, X_train[:100].values)
+    shap_values = explainer.shap_values(X_test[:100].values)
+    
+    X_test_subset = X_test[:100]
+
+    # Generate and display plot
+    shap_values_fixed = shap_values[:, :, 0]
+
+    fig, ax = plt.subplots()
+    shap.summary_plot(shap_values_fixed, X_test_subset)
+    st.pyplot(fig)
+    plt.close(fig)  # Prevent duplicate display
+
+# Prediction interface
+st.header("Customer Default Prediction")
+st.write("Please enter the customer's information:")
+
+col1, col2 = st.columns(2)
+with col1:
+    limit_bal = st.number_input("Credit Limit (NT$)", min_value=1)
+    sex = st.selectbox("Gender", ["Female", "Male"])
+    education = st.selectbox("Education Level", 
+                            ["Graduate School", "University", "High School", "Others"])
+    marriage = st.selectbox("Marital Status", ["Married", "Single", "Others"])
+    age = st.number_input("Age", min_value=18, max_value=100)
+
+with col2:
+    pay_0 = st.number_input("Payment Status - September (PAY_0)", min_value=-2, max_value=8)
+    pay_2 = st.number_input("Payment Status - August (PAY_2)", min_value=-2, max_value=8)
+    pay_3 = st.number_input("Payment Status - July (PAY_3)", min_value=-2, max_value=8)
+    pay_4 = st.number_input("Payment Status - June (PAY_4)", min_value=-2, max_value=8)
+    pay_5 = st.number_input("Payment Status - May (PAY_5)", min_value=-2, max_value=8)
+    pay_6 = st.number_input("Payment Status - April (PAY_6)", min_value=-2, max_value=8)
+
+col3, col4 = st.columns(2)
+with col3:
+    bill_amt1 = st.number_input("Bill Amount - September (NT$)", min_value=0)
+    bill_amt2 = st.number_input("Bill Amount - August (NT$)", min_value=0)
+    bill_amt3 = st.number_input("Bill Amount - July (NT$)", min_value=0)
+    bill_amt4 = st.number_input("Bill Amount - June (NT$)", min_value=0)
+    bill_amt5 = st.number_input("Bill Amount - May (NT$)", min_value=0)
+    bill_amt6 = st.number_input("Bill Amount - April (NT$)", min_value=0)
+
+with col4:
+    pay_amt1 = st.number_input("Payment Amount - September (NT$)", min_value=0)
+    pay_amt2 = st.number_input("Payment Amount - August (NT$)", min_value=0)
+    pay_amt3 = st.number_input("Payment Amount - July (NT$)", min_value=0)
+    pay_amt4 = st.number_input("Payment Amount - June (NT$)", min_value=0)
+    pay_amt5 = st.number_input("Payment Amount - May (NT$)", min_value=0)
+    pay_amt6 = st.number_input("Payment Amount - April (NT$)", min_value=0)
+
+# Create input dictionary
+input_data = {
+    'LIMIT_BAL': limit_bal,
+    'SEX': 2 if sex == "Male" else 1,
+    'EDUCATION': {"Graduate School": 1, "University": 2, "High School": 3, "Others": 4}[education],
+    'MARRIAGE': {"Married": 1, "Single": 2, "Others": 3}[marriage],
+    'AGE': age,
+    'PAY_0': pay_0,
+    'PAY_2': pay_2,
+    'PAY_3': pay_3,
+    'PAY_4': pay_4,
+    'PAY_5': pay_5,
+    'PAY_6': pay_6,
+    'BILL_AMT1': bill_amt1,
+    'BILL_AMT2': bill_amt2,
+    'BILL_AMT3': bill_amt3,
+    'BILL_AMT4': bill_amt4,
+    'BILL_AMT5': bill_amt5,
+    'BILL_AMT6': bill_amt6,
+    'PAY_AMT1': pay_amt1,
+    'PAY_AMT2': pay_amt2,
+    'PAY_AMT3': pay_amt3,
+    'PAY_AMT4': pay_amt4,
+    'PAY_AMT5': pay_amt5,
+    'PAY_AMT6': pay_amt6
+}
+
+if st.button("Predict Default Risk"):
+    processed = preprocess_input(input_data)
+    prediction = model.predict(processed)[0][0]
+    probability = prediction * 100
+    
+    st.subheader("Prediction Result:")
+    if prediction > 0.4:
+        st.error(f"🚨 High Risk: {probability:.1f}% probability of default")
+    else:
+        st.success(f"✅ Low Risk: {probability:.1f}% probability of default")
