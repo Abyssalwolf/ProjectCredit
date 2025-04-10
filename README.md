@@ -1,4 +1,4 @@
-#Requirements to run:
+# Requirements to run:
 1. Clone the repo
 2. Do the commands -
     python -m venv venv
