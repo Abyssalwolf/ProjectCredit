@@ -328,7 +328,7 @@ elif section == "Credit Default Prediction":
     # Updated caching with new Streamlit commands
     @st.cache_resource  # For model and scaler (resources)
     def load_artifacts():
-        model = load_model('creditnetxai_model.h5')
+        model = load_model('creditnetxai_improved_model.h5')
         scaler = joblib.load('standard_scaler.pkl')
         feature_cols = pd.read_csv('feature_columns.csv').iloc[:, 0].tolist()
         return model, scaler, feature_cols
@@ -357,7 +357,7 @@ elif section == "Credit Default Prediction":
 
     # Metrics from training
     ACCURACY = 0.8101666666666667
-    SENSITIVITY = 0.45925361766945927
+    SENSITIVITY = 0.48925361766945927
     SPECIFICITY = 0.9084702368252614
     st.title("Credit Default Prediction System")
 
@@ -366,6 +366,28 @@ elif section == "Credit Default Prediction":
     st.metric("Accuracy", f"{ACCURACY:.2%}")
     st.metric("Sensitivity", f"{SENSITIVITY:.2%}")
     st.metric("Specificity", f"{SPECIFICITY:.2%}")
+
+    st.header("Understanding the SHAP Plot")
+    st.markdown("""
+    ### SHAP Plot Legend
+    
+    The SHAP summary plot above helps visualize how each feature influences the model's prediction:
+    
+    - **Feature Importance**: Features are ordered by importance from top to bottom.
+    - **Color**: Red points indicate high feature values, blue points indicate low feature values.
+    - **Horizontal Position**: Points further to the right show positive impact on default risk, points to the left show negative impact.
+    - **Value Density**: The clustering of points shows the distribution of SHAP values for each feature.
+    
+    #### Key Features Explanation:
+    - **PAY_0, PAY_2, etc.**: Payment status variables (-1 = paid duly, 1+ = months of payment delay)
+    - **LIMIT_BAL**: Credit limit amount in NT dollars
+    - **BILL_AMT1-6**: Monthly bill statements (September to April)
+    - **PAY_AMT1-6**: Monthly payment amounts (September to April)
+    - **EDUCATION**: 1 = graduate school, 2 = university, 3 = high school, 4 = others
+    - **AGE**: Customer's age in years
+    - **SEX**: 1 = female, 2 = male
+    - **MARRIAGE**: 1 = married, 2 = single, 3 = others
+    """)
 
     # SHAP visualization with fixes
     st.header("Feature Importance Analysis")
@@ -403,7 +425,7 @@ elif section == "Credit Default Prediction":
                 "content": [
                     {
                         "type": "text",
-                        "text": "Given the data metadata:\n{'uci_id': 350, 'name': 'Default of Credit Card Clients', 'repository_url': 'https://archive.ics.uci.edu/dataset/350/default+of+credit+card+clients', 'data_url': 'https://archive.ics.uci.edu/static/public/350/data.csv', 'abstract': \"This research aimed at the case of customers' default payments in Taiwan and compares the predictive accuracy of probability of default among six data mining methods.\", 'area': 'Business', 'tasks': ['Classification'], 'characteristics': ['Multivariate'], 'num_instances': 30000, 'num_features': 23, 'feature_types': ['Integer', 'Real'], 'demographics': ['Sex', 'Education Level', 'Marital Status', 'Age'], 'target_col': ['Y'], 'index_col': ['ID'], 'has_missing_values': 'no', 'missing_values_symbol': None, 'year_of_dataset_creation': 2009, 'last_updated': 'Fri Mar 29 2024', 'dataset_doi': '10.24432/C55S3H', 'creators': ['I-Cheng Yeh'], 'intro_paper': {'ID': 365, 'type': 'NATIVE', 'title': 'The comparisons of data mining techniques for the predictive accuracy of probability of default of credit card clients', 'authors': 'I. Yeh, Che-hui Lien', 'venue': 'Expert systems with applications', 'year': 2009, 'journal': None, 'DOI': '10.1016/j.eswa.2007.12.020', 'URL': 'https://www.semanticscholar.org/paper/1cacac4f0ea9fdff3cd88c151c94115a9fddcf33', 'sha': None, 'corpus': None, 'arxiv': None, 'mag': None, 'acl': None, 'pmid': None, 'pmcid': None}, 'additional_info': {'summary': \"This research aimed at the case of customers' default payments in Taiwan and compares the predictive accuracy of probability of default among six data mining methods. From the perspective of risk management, the result of predictive accuracy of the estimated probability of default will be more valuable than the binary result of classification - credible or not credible clients. Because the real probability of default is unknown, this study presented the novel Sorting Smoothing Method to estimate the real probability of default. With the real probability of default as the response variable (Y), and the predictive probability of default as the independent variable (X), the simple linear regression result (Y = A + BX) shows that the forecasting model produced by artificial neural network has the highest coefficient of determination; its regression intercept (A) is close to zero, and regression coefficient (B) to one. Therefore, among the six data mining techniques, artificial neural network is the only one that can accurately estimate the real probability of default.\", 'purpose': None, 'funded_by': None, 'instances_represent': None, 'recommended_data_splits': None, 'sensitive_data': None, 'preprocessing_description': None, 'variable_info': 'This research employed a binary variable, default payment (Yes = 1, No = 0), as the response variable. This study reviewed the literature and used the following 23 variables as explanatory variables:\\r\\nX1: Amount of the given credit (NT dollar): it includes both the individual consumer credit and his/her family (supplementary) credit.\\r\\nX2: Gender (1 = male; 2 = female).\\r\\nX3: Education (1 = graduate school; 2 = university; 3 = high school; 4 = others).\\r\\nX4: Marital status (1 = married; 2 = single; 3 = others).\\r\\nX5: Age (year).\\r\\nX6 - X11: History of past payment. We tracked the past monthly payment records (from April to September, 2005) as follows: X6 = the repayment status in September, 2005; X7 = the repayment status in August, 2005; . . .;X11 = the repayment status in April, 2005. The measurement scale for the repayment status is: -1 = pay duly; 1 = payment delay for one month; 2 = payment delay for two months; . . .; 8 = payment delay for eight months; 9 = payment delay for nine months and above.\\r\\nX12-X17: Amount of bill statement (NT dollar). X12 = amount of bill statement in September, 2005; X13 = amount of bill statement in August, 2005; . . .; X17 = amount of bill statement in April, 2005. \\r\\nX18-X23: Amount of previous payment (NT dollar). X18 = amount paid in September, 2005; X19 = amount paid in August, 2005; . . .;X23 = amount paid in April, 2005.\\r\\n', 'citation': None}}\n\nTake in the image of the figure plotted with shap and explain what you information you can derive from the image. Your explanation should not be larger than 4 sentences and needs to cover the feature that most impacts and how, the feature that least impacts and how and a conclusion"
+                        "text": "Given the data metadata:\n{'uci_id': 350, 'name': 'Default of Credit Card Clients', 'abstract': \"This research aimed at the case of customers' default payments in Taiwan and compares the predictive accuracy of probability of default among six data mining methods.\", 'area': 'Business', 'tasks': ['Classification'], 'characteristics': ['Multivariate'], 'num_instances': 30000, 'num_features': 23, 'feature_types': ['Integer', 'Real'], 'demographics': ['Sex', 'Education Level', 'Marital Status', 'Age'], 'target_col': ['Y'], 'index_col': ['ID'], 'has_missing_values': 'no', 'missing_values_symbol': None, {'summary': \"This research aimed at the case of customers' default payments in Taiwan and compares the predictive accuracy of probability of default among six data mining methods. From the perspective of risk management, the result of predictive accuracy of the estimated probability of default will be more valuable than the binary result of classification - credible or not credible clients. Because the real probability of default is unknown, this study presented the novel Sorting Smoothing Method to estimate the real probability of default. With the real probability of default as the response variable (Y), and the predictive probability of default as the independent variable (X), the simple linear regression result (Y = A + BX) shows that the forecasting model produced by artificial neural network has the highest coefficient of determination; its regression intercept (A) is close to zero, and regression coefficient (B) to one. Therefore, among the six data mining techniques, artificial neural network is the only one that can accurately estimate the real probability of default.\", 'variable_info': 'This research employed a binary variable, default payment (Yes = 1, No = 0), as the response variable. This study reviewed the literature and used the following 23 variables as explanatory variables:\\r\\nX1: Amount of the given credit (NT dollar): it includes both the individual consumer credit and his/her family (supplementary) credit.\\r\\nX2: Gender (1 = male; 2 = female).\\r\\nX3: Education (1 = graduate school; 2 = university; 3 = high school; 4 = others).\\r\\nX4: Marital status (1 = married; 2 = single; 3 = others).\\r\\nX5: Age (year).\\r\\nX6 - X11: History of past payment. We tracked the past monthly payment records (from April to September, 2005) as follows: X6 = the repayment status in September, 2005; X7 = the repayment status in August, 2005; . . .;X11 = the repayment status in April, 2005. The measurement scale for the repayment status is: -1 = pay duly; 1 = payment delay for one month; 2 = payment delay for two months; . . .; 8 = payment delay for eight months; 9 = payment delay for nine months and above.\\r\\nX12-X17: Amount of bill statement (NT dollar). X12 = amount of bill statement in September, 2005; X13 = amount of bill statement in August, 2005; . . .; X17 = amount of bill statement in April, 2005. \\r\\nX18-X23: Amount of previous payment (NT dollar). X18 = amount paid in September, 2005; X19 = amount paid in August, 2005; . . .;X23 = amount paid in April, 2005.\\r\\n', }}\n\nTake in the image of the figure plotted with shap and explain what you information you can derive from the image. Your explanation should not be larger than 4 sentences and needs to cover the feature that most impacts and how, the feature that least impacts and how and a conclusion. Cross check your answer with the image once again. If its wrong correct your answer"
                     },
                     {
                         "type": "image_url",

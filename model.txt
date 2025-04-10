@@ -127,3 +127,13 @@ shap_values_fixed = shap_values[:, :, 0]  # Convert from (100, 30, 1) to (100, 3
 shap.summary_plot(shap_values_fixed, X_test_subset)
 
 model.save('creditnetxai_model.h5')
+
+"Given explanation of the key features of the data: PAY_0, PAY_2, etc.: Payment status variables (-1 = paid duly, 1+ = months of payment delay)
+LIMIT_BAL: Credit limit amount in NT dollars
+BILL_AMT1-6: Monthly bill statements (September to April)
+PAY_AMT1-6: Monthly payment amounts (September to April)
+EDUCATION: 1 = graduate school, 2 = university, 3 = high school, 4 = others
+AGE: Customer's age in years
+SEX: 1 = female, 2 = male
+MARRIAGE: 1 = married, 2 = single, 3 = others\n\nTake in the image of the figure plotted with shap and explain what you information you can derive from the image. Your explanation should not be larger than 4 sentences and needs to cover the feature that most impacts and how, the feature that least impacts and how and a conclusion. Cross check your answer with the image once again. If its wrong correct your answer"
+                   
