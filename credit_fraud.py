@@ -412,8 +412,48 @@ elif section == "Credit Default Prediction":
 
     model, scaler, feature_cols = load_artifacts()
 
-    X_train=pd.read_csv('X_train.csv')
-    X_test=pd.read_csv('X_test.csv')
+    X_train = pd.read_csv('X_train.csv')
+    X_test = pd.read_csv('X_test.csv')
+    
+    # We'll use synthetic data for visualization since we don't have y_train and y_test
+    @st.cache_data
+    def generate_synthetic_labels():
+        # Create synthetic default labels based on PAY_0 values for visualization purposes
+        # Higher PAY_0 values (payment delays) are more likely to be defaults
+        np.random.seed(42)  # For reproducibility
+        
+        # Generate for train data
+        train_defaults = np.zeros(len(X_train))
+        for i, row in X_train.iterrows():
+            # Higher PAY_0 increases chance of default
+            default_prob = 0.1  # Base probability
+            if 'PAY_0' in row:
+                pay_0 = row['PAY_0']
+                if pay_0 > 0:
+                    default_prob += min(0.1 * pay_0, 0.8)  # Increase probability with payment delay
+            train_defaults[i] = 1 if np.random.random() < default_prob else 0
+            
+        # Generate for test data  
+        test_defaults = np.zeros(len(X_test))
+        for i, row in X_test.iterrows():
+            # Higher PAY_0 increases chance of default
+            default_prob = 0.1  # Base probability
+            if 'PAY_0' in row:
+                pay_0 = row['PAY_0']
+                if pay_0 > 0:
+                    default_prob += min(0.1 * pay_0, 0.8)  # Increase probability with payment delay
+            test_defaults[i] = 1 if np.random.random() < default_prob else 0
+            
+        return train_defaults, test_defaults
+    
+    # Get synthetic labels
+    train_defaults, test_defaults = generate_synthetic_labels()
+    
+    # Combine data for visualization
+    train_data = X_train.copy()
+    train_data['DEFAULT'] = train_defaults
+    test_data = X_test.copy()
+    test_data['DEFAULT'] = test_defaults
 
     @st.cache_data  # For data (X_train)
     def load_shap_data():
@@ -443,85 +483,171 @@ elif section == "Credit Default Prediction":
     st.metric("Accuracy", f"{ACCURACY:.2%}")
     st.metric("Sensitivity", f"{SENSITIVITY:.2%}")
     st.metric("Specificity", f"{SPECIFICITY:.2%}")
+    
+    # New Visualization Section
+    st.header("Data Visualizations")
+    
+    viz_tab1, viz_tab2, viz_tab3 = st.tabs(["SHAP Analysis", "Payment Status by Default", "Age & Credit Limit Distribution"])
+    
+    with viz_tab1:
+        st.header("Feature Importance Analysis")
+        with st.spinner("Calculating SHAP values..."):
+            
+            # Initialize explainer with preprocessed data
+            explainer = shap.GradientExplainer(model, X_train[:100].values)
+            shap_values = explainer.shap_values(X_test[:100].values)
+            
+            X_test_subset = X_test[:100]
 
-    st.header("Understanding the SHAP Plot")
-    st.markdown("""
-    ### SHAP Plot Legend
-    
-    The SHAP summary plot above helps visualize how each feature influences the model's prediction:
-    
-    - **Feature Importance**: Features are ordered by importance from top to bottom.
-    - **Color**: Red points indicate high feature values, blue points indicate low feature values.
-    - **Horizontal Position**: Points further to the right show positive impact on default risk, points to the left show negative impact.
-    - **Value Density**: The clustering of points shows the distribution of SHAP values for each feature.
-    
-    #### Key Features Explanation:
-    - **PAY_0, PAY_2, etc.**: Payment status variables (-1 = paid duly, 1+ = months of payment delay)
-    - **LIMIT_BAL**: Credit limit amount in NT dollars
-    - **BILL_AMT1-6**: Monthly bill statements (September to April)
-    - **PAY_AMT1-6**: Monthly payment amounts (September to April)
-    - **EDUCATION**: 1 = graduate school, 2 = university, 3 = high school, 4 = others
-    - **AGE**: Customer's age in years
-    - **SEX**: 1 = female, 2 = male
-    - **MARRIAGE**: 1 = married, 2 = single, 3 = others
-    """)
+            # Generate and display plot
+            shap_values_fixed = shap_values[:, :, 0]
 
-    # SHAP visualization with fixes
-    st.header("Feature Importance Analysis")
-    with st.spinner("Calculating SHAP values..."):
+            fig, ax = plt.subplots()
+            shap.summary_plot(shap_values_fixed, X_test_subset)
+            fig.savefig('shap_plot.png', bbox_inches='tight', dpi=300)
+            st.pyplot(fig)
+            plt.close(fig)  # Prevent duplicate display
+            
+        st.header("Understanding the SHAP Plot")
+        st.markdown("""
+        ### SHAP Plot Legend
         
-        # Initialize explainer with preprocessed data
-        explainer = shap.GradientExplainer(model, X_train[:100].values)
-        shap_values = explainer.shap_values(X_test[:100].values)
+        The SHAP summary plot above helps visualize how each feature influences the model's prediction:
         
-        X_test_subset = X_test[:100]
+        - **Feature Importance**: Features are ordered by importance from top to bottom.
+        - **Color**: Red points indicate high feature values, blue points indicate low feature values.
+        - **Horizontal Position**: Points further to the right show positive impact on default risk, points to the left show negative impact.
+        - **Value Density**: The clustering of points shows the distribution of SHAP values for each feature.
+        
+        #### Key Features Explanation:
+        - **PAY_0, PAY_2, etc.**: Payment status variables (-1 = paid duly, 1+ = months of payment delay)
+        - **LIMIT_BAL**: Credit limit amount in NT dollars
+        - **BILL_AMT1-6**: Monthly bill statements (September to April)
+        - **PAY_AMT1-6**: Monthly payment amounts (September to April)
+        - **EDUCATION**: 1 = graduate school, 2 = university, 3 = high school, 4 = others
+        - **AGE**: Customer's age in years
+        - **SEX**: 1 = female, 2 = male
+        - **MARRIAGE**: 1 = married, 2 = single, 3 = others
+        """)
 
-        # Generate and display plot
-        shap_values_fixed = shap_values[:, :, 0]
+        from groq import Groq
 
-        fig, ax = plt.subplots()
-        shap.summary_plot(shap_values_fixed, X_test_subset)
-        fig.savefig('shap_plot.png', bbox_inches='tight', dpi=300)
-        st.pyplot(fig)
-        plt.close(fig)  # Prevent duplicate display
+        st.header("Analyzing the plot")
 
-    from groq import Groq
+        load_dotenv()
 
-    st.header("Analyzing the plot")
-
-    load_dotenv()
-
-    image_path = "shap_plot.png"
-    base64_image = encode_image(image_path)
-    client = Groq(api_key=os.getenv("API_KEY"))
-    completion = client.chat.completions.create(
-        model="llama-3.2-90b-vision-preview",
-        messages=[
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "text",
-                        "text": "Given the data metadata:\n{'uci_id': 350, 'name': 'Default of Credit Card Clients', 'abstract': \"This research aimed at the case of customers' default payments in Taiwan and compares the predictive accuracy of probability of default among six data mining methods.\", 'area': 'Business', 'tasks': ['Classification'], 'characteristics': ['Multivariate'], 'num_instances': 30000, 'num_features': 23, 'feature_types': ['Integer', 'Real'], 'demographics': ['Sex', 'Education Level', 'Marital Status', 'Age'], 'target_col': ['Y'], 'index_col': ['ID'], 'has_missing_values': 'no', 'missing_values_symbol': None, {'summary': \"This research aimed at the case of customers' default payments in Taiwan and compares the predictive accuracy of probability of default among six data mining methods. From the perspective of risk management, the result of predictive accuracy of the estimated probability of default will be more valuable than the binary result of classification - credible or not credible clients. Because the real probability of default is unknown, this study presented the novel Sorting Smoothing Method to estimate the real probability of default. With the real probability of default as the response variable (Y), and the predictive probability of default as the independent variable (X), the simple linear regression result (Y = A + BX) shows that the forecasting model produced by artificial neural network has the highest coefficient of determination; its regression intercept (A) is close to zero, and regression coefficient (B) to one. Therefore, among the six data mining techniques, artificial neural network is the only one that can accurately estimate the real probability of default.\", 'variable_info': 'This research employed a binary variable, default payment (Yes = 1, No = 0), as the response variable. This study reviewed the literature and used the following 23 variables as explanatory variables:\\r\\nX1: Amount of the given credit (NT dollar): it includes both the individual consumer credit and his/her family (supplementary) credit.\\r\\nX2: Gender (1 = male; 2 = female).\\r\\nX3: Education (1 = graduate school; 2 = university; 3 = high school; 4 = others).\\r\\nX4: Marital status (1 = married; 2 = single; 3 = others).\\r\\nX5: Age (year).\\r\\nX6 - X11: History of past payment. We tracked the past monthly payment records (from April to September, 2005) as follows: X6 = the repayment status in September, 2005; X7 = the repayment status in August, 2005; . . .;X11 = the repayment status in April, 2005. The measurement scale for the repayment status is: -1 = pay duly; 1 = payment delay for one month; 2 = payment delay for two months; . . .; 8 = payment delay for eight months; 9 = payment delay for nine months and above.\\r\\nX12-X17: Amount of bill statement (NT dollar). X12 = amount of bill statement in September, 2005; X13 = amount of bill statement in August, 2005; . . .; X17 = amount of bill statement in April, 2005. \\r\\nX18-X23: Amount of previous payment (NT dollar). X18 = amount paid in September, 2005; X19 = amount paid in August, 2005; . . .;X23 = amount paid in April, 2005.\\r\\n', }}\n\nTake in the image of the figure plotted with shap and explain what you information you can derive from the image. Your explanation should not be larger than 4 sentences and needs to cover the feature that most impacts and how, the feature that least impacts and how and a conclusion. Cross check your answer with the image once again. If its wrong correct your answer"
-                    },
-                    {
-                        "type": "image_url",
-                        "image_url": {
-                            "url": f"data:image/png;base64,{base64_image}"
+        image_path = "shap_plot.png"
+        base64_image = encode_image(image_path)
+        client = Groq(api_key=os.getenv("API_KEY"))
+        completion = client.chat.completions.create(
+            model="meta-llama/llama-4-maverick-17b-128e-instruct",
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": "Given the data metadata:\n{'uci_id': 350, 'name': 'Default of Credit Card Clients', 'abstract': \"This research aimed at the case of customers' default payments in Taiwan and compares the predictive accuracy of probability of default among six data mining methods.\", 'area': 'Business', 'tasks': ['Classification'], 'characteristics': ['Multivariate'], 'num_instances': 30000, 'num_features': 23, 'feature_types': ['Integer', 'Real'], 'demographics': ['Sex', 'Education Level', 'Marital Status', 'Age'], 'target_col': ['Y'], 'index_col': ['ID'], 'has_missing_values': 'no', 'missing_values_symbol': None, {'summary': \"This research aimed at the case of customers' default payments in Taiwan and compares the predictive accuracy of probability of default among six data mining methods. From the perspective of risk management, the result of predictive accuracy of the estimated probability of default will be more valuable than the binary result of classification - credible or not credible clients. Because the real probability of default is unknown, this study presented the novel Sorting Smoothing Method to estimate the real probability of default. With the real probability of default as the response variable (Y), and the predictive probability of default as the independent variable (X), the simple linear regression result (Y = A + BX) shows that the forecasting model produced by artificial neural network has the highest coefficient of determination; its regression intercept (A) is close to zero, and regression coefficient (B) to one. Therefore, among the six data mining techniques, artificial neural network is the only one that can accurately estimate the real probability of default.\", 'variable_info': 'This research employed a binary variable, default payment (Yes = 1, No = 0), as the response variable. This study reviewed the literature and used the following 23 variables as explanatory variables:\\r\\nX1: Amount of the given credit (NT dollar): it includes both the individual consumer credit and his/her family (supplementary) credit.\\r\\nX2: Gender (1 = male; 2 = female).\\r\\nX3: Education (1 = graduate school; 2 = university; 3 = high school; 4 = others).\\r\\nX4: Marital status (1 = married; 2 = single; 3 = others).\\r\\nX5: Age (year).\\r\\nX6 - X11: History of past payment. We tracked the past monthly payment records (from April to September, 2005) as follows: X6 = the repayment status in September, 2005; X7 = the repayment status in August, 2005; . . .;X11 = the repayment status in April, 2005. The measurement scale for the repayment status is: -1 = pay duly; 1 = payment delay for one month; 2 = payment delay for two months; . . .; 8 = payment delay for eight months; 9 = payment delay for nine months and above.\\r\\nX12-X17: Amount of bill statement (NT dollar). X12 = amount of bill statement in September, 2005; X13 = amount of bill statement in August, 2005; . . .; X17 = amount of bill statement in April, 2005. \\r\\nX18-X23: Amount of previous payment (NT dollar). X18 = amount paid in September, 2005; X19 = amount paid in August, 2005; . . .;X23 = amount paid in April, 2005.\\r\\n', }}\n\nTake in the image of the figure plotted with shap and explain what you information you can derive from the image. Your explanation should not be larger than 4 sentences and needs to cover the feature that most impacts and how, the feature that least impacts and how and a conclusion. Cross check your answer with the image once again. If its wrong correct your answer"
+                        },
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/png;base64,{base64_image}"
+                            }
                         }
-                    }
-                ]
-            }
-        ],
-        temperature=1,
-        max_completion_tokens=1024,
-        top_p=1,
-        stream=False,
-        stop=None,
-    )
+                    ]
+                }
+            ],
+            temperature=1,
+            max_completion_tokens=1024,
+            top_p=1,
+            stream=False,
+            stop=None,
+        )
 
-    st.write(completion.choices[0].message.content)
-
+        st.write(completion.choices[0].message.content)
+    
+    with viz_tab2:
+        st.subheader("Payment Status Distribution by Default")
+        
+        # Create a bar chart showing payment status distribution by default status
+        pay_columns = ['PAY_0', 'PAY_2', 'PAY_3', 'PAY_4', 'PAY_5', 'PAY_6']
+        pay_column = st.selectbox("Select Payment Month:", pay_columns)
+        
+        # Generate bar graph
+        fig, ax = plt.subplots(figsize=(10, 6))
+        
+        # Group data by payment status and default, then count
+        payment_default_counts = pd.crosstab(train_data[pay_column], train_data['DEFAULT'])
+        
+        # Rename columns for clarity
+        payment_default_counts.columns = ['No Default', 'Default']
+        
+        # Create stacked bar chart
+        payment_default_counts.plot(kind='bar', stacked=True, ax=ax, color=['#4CAF50', '#F44336'])
+        
+        # Add labels and title
+        plt.title(f'Payment Status Distribution by Default Outcome ({pay_column})')
+        plt.xlabel('Payment Status (-1: Paid Duly, 1+: Months Delayed)')
+        plt.ylabel('Count')
+        plt.legend(title='Outcome')
+        plt.tight_layout()
+        
+        # Display in Streamlit
+        st.pyplot(fig)
+        plt.close(fig)
+        
+        st.markdown("""
+        ### Understanding the Payment Status Chart
+        
+        This bar chart shows the relationship between payment status and default outcome:
+        
+        - **Payment Status**: -1 means paid duly, positive values indicate months of payment delay
+        - **Stacked Bars**: Green portion shows customers who didn't default, red shows those who did
+        - **Pattern Analysis**: Higher ratios of defaults are typically associated with increasing payment delays
+        
+        *Note: This visualization uses synthetic default data based on PAY_0 values to demonstrate the relationship.*
+        """)
+    
+    with viz_tab3:
+        st.subheader("Age & Credit Limit Distribution by Default Status")
+        
+        # Create boxplots for numeric features
+        numeric_features = ['AGE', 'LIMIT_BAL']
+        selected_feature = st.selectbox("Select Feature for Analysis:", numeric_features)
+        
+        # Generate boxplot
+        fig, ax = plt.subplots(figsize=(10, 6))
+        
+        # Create DataFrame with only required columns
+        plot_data = train_data[[selected_feature, 'DEFAULT']].copy()
+        plot_data['DEFAULT'] = plot_data['DEFAULT'].map({0: 'No Default', 1: 'Default'})
+        
+        # Create boxplot
+        sns.boxplot(x='DEFAULT', y=selected_feature, data=plot_data, palette=['#4CAF50', '#F44336'], ax=ax)
+        
+        # Add labels and title
+        plt.title(f'{selected_feature} Distribution by Default Status')
+        plt.ylabel(selected_feature)
+        plt.xlabel('Default Status')
+        plt.tight_layout()
+        
+        # Display in Streamlit
+        st.pyplot(fig)
+        plt.close(fig)
+        
+        st.markdown(f"""
+        ### Understanding the {selected_feature} Distribution
+        
+        This boxplot shows how {selected_feature.lower()} is distributed across default and non-default customers:
+        
+        - **Box**: Middle line shows median, box represents interquartile range (25th to 75th percentile)
+        - **Whiskers**: Show range of values (excluding outliers)
+        - **Outliers**: Individual points beyond the whiskers
+        - **Comparison**: Helps identify if {selected_feature.lower()} shows clear patterns associated with default risk
+        
+        *Note: This visualization uses synthetic default data based on PAY_0 values to demonstrate the relationship.*
+        """)
 
     # Prediction interface
     st.header("Customer Default Prediction")
