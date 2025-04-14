@@ -27,7 +27,7 @@ st.title("Credit Card Fraud Detection Model comparison and Credit Default Predic
 st.sidebar.header("Navigation")
 section = st.sidebar.selectbox(
     "Choose a section:",
-    ("Pre-Processing", "Model Results", "Credit Default Prediction"),
+    ("Pre-Processing", "Model Results","Fraud Prediction", "Credit Default Prediction"),
     index=0
 )
 
@@ -102,9 +102,13 @@ if section == "Pre-Processing":
         )
 
         # Scaling Time and Amount
-        rob_scaler = RobustScaler()
-        df['scaled_amount'] = rob_scaler.fit_transform(df['Amount'].values.reshape(-1, 1))
-        df['scaled_time'] = rob_scaler.fit_transform(df['Time'].values.reshape(-1, 1))
+        rob_scaler_amount = RobustScaler()
+        df['scaled_amount'] = rob_scaler_amount.fit_transform(df['Amount'].values.reshape(-1, 1))
+        joblib.dump(rob_scaler_amount, 'robust_scaler_amount.pkl')  # Save scaler
+
+        rob_scaler_time = RobustScaler()
+        df['scaled_time'] = rob_scaler_time.fit_transform(df['Time'].values.reshape(-1, 1))
+        joblib.dump(rob_scaler_time, 'robust_scaler_time.pkl')
 
         # Drop original columns
         df.drop(['Time', 'Amount'], axis=1, inplace=True)
@@ -319,6 +323,79 @@ elif section == "Model Results":
             "This application provides a comparative analysis of different machine learning models for credit card fraud detection. "
             "Use the sidebar to switch between models and view their results in an easy-to-understand format."
         )
+
+elif section == "Fraud Prediction":
+    st.header("Credit Card Fraud Prediction")
+
+    # Load scalers
+    try:
+        rob_scaler_amount = joblib.load('robust_scaler_amount.pkl')
+        rob_scaler_time = joblib.load('robust_scaler_time.pkl')
+    except FileNotFoundError:
+        st.error("Scalers not found. Please preprocess the data first.")
+        st.stop()
+
+    # Input form
+    with st.form("fraud_input_form"):
+        st.subheader("Transaction Details")
+        time_input = st.number_input("Time (seconds since first transaction)")
+        amount_input = st.number_input("Amount (USD)")
+
+        # Collect V1-V28 inputs
+        st.subheader("PCA Components (V1-V28)")
+        cols = st.columns(4)
+        v_inputs = []
+        for i in range(28):
+            with cols[i % 4]:
+                v_inputs.append(st.number_input(f"V{i+1}", key=f"v_{i+1}"))
+
+        submitted = st.form_submit_button("Predict")
+
+    if submitted:
+        # Scale inputs
+        scaled_time = rob_scaler_time.transform([[time_input]])[0][0]
+        scaled_amount = rob_scaler_amount.transform([[amount_input]])[0][0]
+
+        # Create feature array (order: V1-V28, scaled_amount, scaled_time)
+        features = v_inputs + [scaled_amount, scaled_time]
+        features_array = np.array(features).reshape(1, -1)
+
+        # Train models (if not cached)
+        if 'trained_models' not in st.session_state:
+            with st.spinner("Training models..."):
+                knn = KNeighborsClassifier(n_neighbors=5)
+                knn.fit(st.session_state['X_train'], st.session_state['y_train'])
+
+                svm = SVC(kernel='linear', probability=True, random_state=42)
+                svm.fit(st.session_state['X_train'], st.session_state['y_train'])
+
+                log_reg = LogisticRegression(max_iter=1000, random_state=42)
+                log_reg.fit(st.session_state['X_train'], st.session_state['y_train'])
+
+                nb = GaussianNB()
+                nb.fit(st.session_state['X_train'], st.session_state['y_train'])
+
+                st.session_state['trained_models'] = {
+                    'KNN': knn,
+                    'SVM': svm,
+                    'Logistic Regression': log_reg,
+                    'Naive Bayes': nb
+                }
+
+        # Predict
+        results = {}
+        for model_name, model in st.session_state['trained_models'].items():
+            pred = model.predict(features_array)[0]
+            proba = model.predict_proba(features_array)[0][1]
+            results[model_name] = {'prediction': pred, 'probability': proba}
+
+        # Display results
+        st.subheader("Prediction Results")
+        for model, data in results.items():
+            st.write(f"**{model}**")
+            st.write(f"Prediction: {'Fraud' if data['prediction'] == 1 else 'Non-Fraud'}")
+            st.write(f"Fraud Probability: {data['probability']:.2%}")
+            st.markdown("---")
 
 elif section == "Credit Default Prediction":
     def encode_image(image_path):
