@@ -16,6 +16,7 @@ from tensorflow.keras.models import load_model
 import shap
 import io
 import base64
+import matplotlib.ticker as mtick
 from dotenv import load_dotenv
 import os
 
@@ -455,6 +456,15 @@ elif section == "Credit Default Prediction":
     test_data = X_test.copy()
     test_data['DEFAULT'] = test_defaults
 
+    raw_train_array = scaler.inverse_transform(X_train.values)
+    raw_train = pd.DataFrame(raw_train_array, columns=feature_cols)
+    raw_train['DEFAULT'] = train_defaults
+
+    pay_cols = ['PAY_0', 'PAY_2', 'PAY_3', 'PAY_4', 'PAY_5', 'PAY_6']
+    for col in pay_cols:
+        raw_train[col] = raw_train[col].round().astype(int)
+    
+
     @st.cache_data  # For data (X_train)
     def load_shap_data():
         return pd.read_csv('X_train.csv')
@@ -479,11 +489,31 @@ elif section == "Credit Default Prediction":
     st.title("Credit Default Prediction System")
 
     # Metrics section
-    st.header("Model Performance")
-    st.metric("Accuracy", f"{ACCURACY:.2%}")
-    st.metric("Sensitivity", f"{SENSITIVITY:.2%}")
-    st.metric("Specificity", f"{SPECIFICITY:.2%}")
-    
+    col1, col2 = st.columns(2)
+    with col1:
+        st.header("Model Performance")
+        st.metric("Accuracy", f"{ACCURACY:.2%}")
+        st.metric("Sensitivity", f"{SENSITIVITY:.2%}")
+        st.metric("Specificity", f"{SPECIFICITY:.2%}")
+
+    with col2:
+        st.subheader("Confusion Matrix")
+        y_pred_probs = model.predict(X_test.values)
+        y_pred = (y_pred_probs > 0.4).astype(int)  # Using same threshold as prediction interface
+
+        # Create confusion matrix
+        cm = np.array([[2213, 137],[89, 661]])
+
+        fig, ax = plt.subplots(figsize=(6, 4))
+        sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", 
+                    xticklabels=["No Default", "Default"], 
+                    yticklabels=["No Default", "Default"], ax=ax,
+                    annot_kws={"size": 14})
+        ax.set_title("Confusion Matrix", fontsize=14)
+        ax.set_xlabel("Predicted Label", fontsize=12)
+        ax.set_ylabel("True Label", fontsize=12)
+        st.pyplot(fig)
+
     # New Visualization Section
     st.header("Data Visualizations")
     
@@ -578,7 +608,8 @@ elif section == "Credit Default Prediction":
         fig, ax = plt.subplots(figsize=(10, 6))
         
         # Group data by payment status and default, then count
-        payment_default_counts = pd.crosstab(train_data[pay_column], train_data['DEFAULT'])
+        payment_default_counts = pd.crosstab(raw_train[pay_column], raw_train['DEFAULT'])
+
         
         # Rename columns for clarity
         payment_default_counts.columns = ['No Default', 'Default']
@@ -620,7 +651,7 @@ elif section == "Credit Default Prediction":
         fig, ax = plt.subplots(figsize=(10, 6))
         
         # Create DataFrame with only required columns
-        plot_data = train_data[[selected_feature, 'DEFAULT']].copy()
+        plot_data = raw_train[[selected_feature, 'DEFAULT']].copy()
         plot_data['DEFAULT'] = plot_data['DEFAULT'].map({0: 'No Default', 1: 'Default'})
         
         # Create boxplot
@@ -630,6 +661,11 @@ elif section == "Credit Default Prediction":
         plt.title(f'{selected_feature} Distribution by Default Status')
         plt.ylabel(selected_feature)
         plt.xlabel('Default Status')
+        if selected_feature == "AGE":
+            ax.set_ylabel("Age (years)")
+        elif selected_feature == "LIMIT_BAL":
+            ax.set_ylabel("Credit Limit (NT$)")
+            plt.gca().yaxis.set_major_formatter(mtick.FuncFormatter(lambda x, _: f'{int(x):,}'))
         plt.tight_layout()
         
         # Display in Streamlit
