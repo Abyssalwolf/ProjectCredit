@@ -570,7 +570,7 @@ elif section == "Credit Default Prediction":
         base64_image = encode_image(image_path)
         client = Groq(api_key=os.getenv("API_KEY"))
         completion = client.chat.completions.create(
-            model="meta-llama/llama-4-maverick-17b-128e-instruct",
+            model="meta-llama/llama-4-scout-17b-16e-instruct",
             messages=[
                 {
                     "role": "user",
