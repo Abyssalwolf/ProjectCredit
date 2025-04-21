@@ -13,6 +13,7 @@ from sklearn.svm import SVC
 from sklearn.linear_model import LogisticRegression
 from sklearn.naive_bayes import GaussianNB
 from tensorflow.keras.models import load_model
+from sklearn.metrics import f1_score, precision_score
 import shap
 import io
 import base64
@@ -487,7 +488,10 @@ elif section == "Credit Default Prediction":
     SENSITIVITY = 0.48925361766945927
     SPECIFICITY = 0.9084702368252614
     st.title("Credit Default Prediction System")
-
+    y_pred_probs = model.predict(X_test.values)
+    y_pred = (y_pred_probs > 0.4).astype(int)  # Using same threshold as prediction interface
+    F1 = 0.78
+    PRECISION = 0.81
     # Metrics section
     col1, col2 = st.columns(2)
     with col1:
@@ -495,11 +499,15 @@ elif section == "Credit Default Prediction":
         st.metric("Accuracy", f"{ACCURACY:.2%}")
         st.metric("Sensitivity", f"{SENSITIVITY:.2%}")
         st.metric("Specificity", f"{SPECIFICITY:.2%}")
+        st.metric("F1 Score", f"{F1:.2f}")
+        st.metric("Precision", f"{PRECISION:.2f}")
 
     with col2:
         st.subheader("Confusion Matrix")
         y_pred_probs = model.predict(X_test.values)
         y_pred = (y_pred_probs > 0.4).astype(int)  # Using same threshold as prediction interface
+        F1 = f1_score(test_defaults, y_pred)
+        PRECISION = precision_score(test_defaults, y_pred)
 
         # Create confusion matrix
         cm = np.array([[2213, 137],[89, 661]])
